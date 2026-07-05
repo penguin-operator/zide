@@ -14,6 +14,7 @@ term: posix.termios
 TIOCGWINSZ :: u32(0x5413)
 
 root: ^win
+focus: ^win = nil
 
 init :: proc () {
 	posix.tcgetattr(0, &term)
@@ -22,7 +23,7 @@ init :: proc () {
 	t.c_oflag -= {.OPOST}
 	t.c_cflag += {.CS8}
 	t.c_lflag -= {.ECHO, .ICANON, .IEXTEN, .ISIG}
-	t.c_cc[.VMIN] = 0
+	t.c_cc[.VMIN] = 1
 	t.c_cc[.VTIME] = 0
 	linux.write(1, transmute([]u8)string("\e[?1049h\e[H"))
 	posix.tcsetattr(0, .TCSANOW, &t)
@@ -33,23 +34,16 @@ init :: proc () {
 		linux.ioctl(0, TIOCGWINSZ, uintptr(&size))
 	})
 	root = new(win)
-	root.y, root.x = 0, 0
-	root.h, root.w = size.h, size.w
-	border(root)
-	print("^Q exit", y=root.y+root.h-2, x=root.x+1)
-	print(y=root.y+1, x=root.x+1)
+	root.h = size.h
+	root.w = size.w
+	root.y = 0
+	root.x = 0
+	focus = root
 }
 
 loop :: proc () {
-	if k := getch(); k != 0 {
-		print("\e[H\e[J")
-		border(root)
-		print("^Q exit", y=root.y+root.h-2, x=root.x+1)
-		print(y=root.y+1, x=root.x+1)
-		if k == 0x11 {
-			zide.exit()
-		}
-	}
+	if focus == nil do exit()
+	if focus.main != nil do focus.main(focus)
 }
 
 exit :: proc () {
@@ -58,13 +52,14 @@ exit :: proc () {
 	free(root)
 }
 
-print :: proc (s: ..string, y: u16 = 0, x: u16 = 0) {
+print :: proc (w: ^win, s: ..string, y: u16 = 0, x: u16 = 0) {
 	buf: [16]u8
-	linux.write(1, transmute([]u8)strings.concatenate({"\e[", strconv.write_uint(buf[:8], u64(y+1), 10), ";", strconv.write_uint(buf[8:], u64(x+1), 10), "H"}))
+	linux.write(1, transmute([]u8)strings.concatenate({"\e[", strconv.write_uint(buf[:8], u64(w.y+y+1), 10), ";", strconv.write_uint(buf[8:], u64(w.x+x+1), 10), "H"}))
 	for e in s do linux.write(1, transmute([]u8)e)
 }
 
-getch :: proc () -> rune {
+getch :: proc (w: ^win) -> rune {
+	if w != focus do return 0
 	c: [4]u8
 	n, _ := linux.read(0, c[:])
 	k, _ := utf8.decode_rune(c[:n])

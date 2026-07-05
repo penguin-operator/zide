@@ -1,4 +1,3 @@
-#+feature dynamic-literals
 package core
 
 import "core:sys/linux"
