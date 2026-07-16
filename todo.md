@@ -1,10 +1,11 @@
 # TODOs
 
 - [-] UI
-	- [-] Colors and Styles
-	- [-] Double buffering (WIP)
-	- [ ] Windowing
-	- [ ] Input fields
+	- [X] Initial screen
+	- [X] Colors and Styles
+	- [X] Double buffering
+	- [X] Windowing
+	- [-] Input fields
 	- [ ] Status bar
 - [-] Plugins
 	- [-] Implement core systems as plugins
