@@ -1,15 +1,5 @@
 package ui
 
-cursor :: struct {
-	y, x: u16,
-	s: enum {
-		NONE = 0,
-		BLOCK = 1,
-		UNDERLINE = 2,
-		BEAM = 3
-	},
-}
-
 style :: struct {
 	w: enum u8 {
 		NONE = 0,
@@ -21,7 +11,7 @@ style :: struct {
 	bg, fg: union{color},
 }
 
-color :: union {
+color :: union #no_nil {
 	color_std,
 	color_rgb,
 }
