@@ -24,7 +24,27 @@ cell :: struct {
 }
 
 @(private = "package")
+free_queue: [dynamic]^win
+
+@(private = "package")
 oldbuf, newbuf: [][]cell
+
+@(private = "package")
+move_cursor :: proc (y, x: u16) {
+	by, bx: [8]u8
+	linux.write(1, transmute([]u8)strings.concatenate({"\e[", strconv.write_uint(by[:], u64(y+1), 10), ";", strconv.write_uint(bx[:], u64(x+1), 10), "H"}))
+}
+
+@(private = "file")
+run :: proc (w: ^win) {
+	if w.main != nil do w->main()
+	for c in w.children do run(c)
+}
+
+cursor: struct {
+	y, x: u16,
+	s: enum { NONE = 0, BLOCK = 1, UNDERLINE = 2, BEAM = 3 },
+}
 
 init :: proc () {
 	posix.tcgetattr(0, &term)
@@ -33,7 +53,7 @@ init :: proc () {
 	t.c_oflag -= {.OPOST}
 	t.c_cflag += {.CS8}
 	t.c_lflag -= {.ECHO, .ICANON, .IEXTEN, .ISIG}
-	t.c_cc[.VMIN] = 0
+	t.c_cc[.VMIN] = 1
 	t.c_cc[.VTIME] = 0
 	linux.write(1, transmute([]u8)string("\e[?1049h\e[H"))
 	posix.tcsetattr(0, .TCSANOW, &t)
@@ -61,16 +81,19 @@ init :: proc () {
 }
 
 loop :: proc () {
-	run :: proc (w: ^win) {
-		if w.main != nil do w->main()
-		for c in w.children do run(c)
+	for len(free_queue) > 0 {
+		w := free_queue[0]
+		for i in 0..<w.h do delete(w.buf[i])
+		delete(w.buf)
+		free(w)
+		ordered_remove(&free_queue, 0)
 	}
 	run(root)
 	refresh(root)
 	for y in 0..<size.h {
 		for x in 0..<size.w {
 			if newbuf[y][x] != oldbuf[y][x] {
-				cursor(y, x)
+				move_cursor(y, x)
 				switch s in newbuf[y][x].s {
 				case nil:
 					linux.write(1, transmute([]u8)string("\e[0m"))
@@ -86,8 +109,8 @@ loop :: proc () {
 					if s.blink do linux.write(1, transmute([]u8)string("\e[5m"))
 					if s.inverse do linux.write(1, transmute([]u8)string("\e[7m"))
 					if s.hidden do linux.write(1, transmute([]u8)string("\e[8m"))
-					if s.bg != nil do color_apply(s.bg.(color), .BG)
-					if s.fg != nil do color_apply(s.fg.(color), .FG)
+					if s.bg != nil do color_apply(s.bg, .BG)
+					if s.fg != nil do color_apply(s.fg, .FG)
 				}
 				if newbuf[y][x].c == 0 do linux.write(1, []u8{' '})
 				else {
@@ -99,23 +122,24 @@ loop :: proc () {
 			oldbuf[y][x] = newbuf[y][x]
 		}
 	}
-}
-
-exit :: proc () {
-	linux.write(1, transmute([]u8)string("\e[?25h\e[?1049l"))
-	posix.tcsetattr(0, .TCSANOW, &term)
-	free(root)
-}
-
-cursor :: proc(y, x: u16, s: enum { NONE = 0, BLOCK = 1, UNDERLINE = 2, BEAM = 3 } = .NONE) {
-	by, bx: [8]u8
-	linux.write(1, transmute([]u8)strings.concatenate({"\e[", strconv.write_uint(by[:], u64(y+1), 10), ";", strconv.write_uint(bx[:], u64(x+1), 10), "H"}))
-	switch s {
+	move_cursor(cursor.y, cursor.x)
+	switch cursor.s {
 	case .NONE:      linux.write(1, transmute([]u8)string("\e[?25l"))
 	case .BLOCK:     linux.write(1, transmute([]u8)string("\e[?25h\e[1 q"))
 	case .UNDERLINE: linux.write(1, transmute([]u8)string("\e[?25h\e[3 q"))
 	case .BEAM:      linux.write(1, transmute([]u8)string("\e[?25h\e[5 q"))
 	}
+	inbuf = 0
+	c: [4]u8
+	n, _ := linux.read(0, c[:])
+	inbuf, n = utf8.decode_rune(c[:n])
+	if n == 0 do inbuf = 0
+}
+
+exit :: proc () {
+	linux.write(1, transmute([]u8)string("\e[?25h\e[?1049l"))
+	posix.tcsetattr(0, .TCSANOW, &term)
+	remove(root)
 }
 
 color_apply :: proc (c: color, g: enum { FG = 0, BG = 1 } = .FG) {

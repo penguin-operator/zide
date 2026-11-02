@@ -6,7 +6,9 @@
 	- [X] Double buffering
 	- [X] Windowing
 	- [ ] Input fields
-	- [ ] Status bar
+	- [ ] Status and keybinds bar
+	- [ ] Focusing a window
+	- [ ] Input for focused window and its parents
 - [ ] Plugins
 	- [ ] Implement core systems as plugins
 	- [ ] Dynamic loading from files

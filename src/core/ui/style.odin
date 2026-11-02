@@ -8,10 +8,10 @@ style :: struct {
 	},
 	italic, underline, strikethrough: bool,
 	blink, inverse, hidden: bool,
-	bg, fg: union{color},
+	bg, fg: color,
 }
 
-color :: union #no_nil {
+color :: union {
 	color_std,
 	color_rgb,
 }

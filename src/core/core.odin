@@ -3,6 +3,7 @@ package core
 import "core:sys/linux"
 
 plugin :: struct {
+	name: string,
 	init, loop, exit: proc(),
 }
 
